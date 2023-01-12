@@ -1,65 +1,37 @@
 package com.v2ray.ang.ui
 
-import android.Manifest
 import android.content.*
-import android.net.Uri
 import android.net.VpnService
-import androidx.recyclerview.widget.LinearLayoutManager
-import android.view.Menu
-import android.view.MenuItem
-import com.tbruyelle.rxpermissions.RxPermissions
-import com.v2ray.ang.R
 import android.os.Bundle
-import android.text.TextUtils
-import android.view.KeyEvent
-import com.v2ray.ang.AppConfig
-import android.content.res.ColorStateList
-import com.google.android.material.navigation.NavigationView
-import androidx.core.content.ContextCompat
-import androidx.core.view.GravityCompat
-import androidx.appcompat.app.ActionBarDrawerToggle
-import androidx.recyclerview.widget.ItemTouchHelper
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
-import androidx.lifecycle.lifecycleScope
-import com.google.gson.Gson
+import androidx.lifecycle.MutableLiveData
 import com.tencent.mmkv.MMKV
-import com.v2ray.ang.AppConfig.ANG_PACKAGE
-import com.v2ray.ang.BuildConfig
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.R
 import com.v2ray.ang.databinding.ActivityMahsaMainBinding
-import com.v2ray.ang.databinding.ActivityMainBinding
-import com.v2ray.ang.dto.EConfigType
-import com.v2ray.ang.dto.ServerConfig
-import com.v2ray.ang.dto.V2rayConfig
-import com.v2ray.ang.dto.VmessQRCode
 import com.v2ray.ang.extension.toast
-import rx.Observable
-import rx.android.schedulers.AndroidSchedulers
-import java.util.concurrent.TimeUnit
-import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
 import com.v2ray.ang.service.V2RayServiceManager
 import com.v2ray.ang.util.*
-import com.v2ray.ang.viewmodel.MainViewModel
 import kotlinx.coroutines.*
-import me.drakeet.support.toast.ToastCompat
-import java.io.File
-import java.io.FileOutputStream
+
 
 class MahsaMainActivity : BaseActivity() {
     private lateinit var binding: ActivityMahsaMainBinding
+
+    private val TAG = "MahsaMainActivity"
 
     private val mainStorage by lazy { MMKV.mmkvWithID(MmkvManager.ID_MAIN, MMKV.MULTI_PROCESS_MODE) }
     private val settingsStorage by lazy { MMKV.mmkvWithID(MmkvManager.ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
-            startV2Ray()
+            connectToVPN()
         }
     }
 
     private var isConnected = false;
+    val isRunning by lazy { MutableLiveData<Boolean>() }
+    var delaysMap =  mutableMapOf<String, Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,84 +46,99 @@ class MahsaMainActivity : BaseActivity() {
 
         //TODO: this should come from server
 
-//        var json_str = "{\"configType\":\"VMESS\",\"outboundBean\":{\"mux\":{\"concurrency\":8,\"enabled\":false},\"protocol\":\"vmess\",\"settings\":{\"vnext\":[{\"address\":\"192.248.173.113\",\"users\":[{\"alterId\":0,\"encryption\":\"\",\"flow\":\"\",\"id\":\"01a37cbd-8eb2-4ecc-a52f-0814dcab177d\",\"security\":\"auto\",\"level\":8}],\"port\":38637}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"none\",\"wsSettings\":{\"headers\":{\"Host\":\"\"},\"path\":\"/\"}},\"tag\":\"proxy\"},\"remarks\":\"5685297461\",\"subscriptionId\":\"\",\"configVersion\":3,\"addedTime\":1667535304448}"
-        var str = "vmess://ewogICJ2IjogIjIiLAogICJwcyI6ICJ0ZXN0X2FuZHJvaWQiLAogICJhZGQiOiAiOTUuMTc5LjIyNi45OCIsCiAgInBvcnQiOiAyMzk4MSwKICAiaWQiOiAiNmZkYmIzOGMtNjkxNi00Y2QyLWE5ZTQtNzc5YWIxM2FhODA0IiwKICAiYWlkIjogMCwKICAibmV0IjogIndzIiwKICAidHlwZSI6ICJub25lIiwKICAiaG9zdCI6ICIiLAogICJwYXRoIjogIi8iLAogICJ0bHMiOiAibm9uZSIKfQ=="
-        AngConfigManager.importBatchConfig(str, "", false);
-        var serverList = MmkvManager.decodeServerList()
-        if (serverList.size > 0) {
-            var guid = serverList.get(0)
-            mainStorage?.encode(MmkvManager.KEY_SELECTED_SERVER, guid)
-        }
-
-//        var config = ServerConfig.create(EConfigType.VMESS)
-//        val streamSetting = config.outboundBean?.streamSettings
-//        var fingerprint = streamSetting?.tlsSettings?.fingerprint
-//        if (!AngConfigManager.tryParseNewVmess(str, config, true)) {
-//            if (str.indexOf("?") > 0) {
-//                if (!AngConfigManager.tryResolveVmess4Kitsunebi(str, config)) {
-//                    return R.string.toast_incorrect_protocol
-//                }
-//            } else {
-//                var result = str.replace(EConfigType.VMESS.protocolScheme, "")
-//                result = Utils.decode(result)
-//                if (TextUtils.isEmpty(result)) {
-//                    return R.string.toast_decoding_failed
-//                }
-//                val vmessQRCode = Gson().fromJson(result, VmessQRCode::class.java)
-//                // Although VmessQRCode fields are non null, looks like Gson may still create null fields
-//                if (TextUtils.isEmpty(vmessQRCode.add)
-//                    || TextUtils.isEmpty(vmessQRCode.port)
-//                    || TextUtils.isEmpty(vmessQRCode.id)
-//                    || TextUtils.isEmpty(vmessQRCode.net)
-//                ) {
-//                    return R.string.toast_incorrect_protocol
-//                }
-//
-//                config.remarks = vmessQRCode.ps
-//                config.outboundBean?.settings?.vnext?.get(0)?.let { vnext ->
-//                    vnext.address = vmessQRCode.add
-//                    vnext.port = Utils.parseInt(vmessQRCode.port)
-//                    vnext.users[0].id = vmessQRCode.id
-//                    vnext.users[0].security = if (TextUtils.isEmpty(vmessQRCode.scy)) V2rayConfig.DEFAULT_SECURITY else vmessQRCode.scy
-//                    vnext.users[0].alterId = Utils.parseInt(vmessQRCode.aid)
-//                }
-//                val sni = streamSetting.populateTransportSettings(vmessQRCode.net, vmessQRCode.type, vmessQRCode.host,
-//                    vmessQRCode.path, vmessQRCode.path, vmessQRCode.host, vmessQRCode.path, vmessQRCode.type, vmessQRCode.path)
-//
-//
-//                streamSetting.populateTlsSettings(vmessQRCode.tls, true,
-//                    if (TextUtils.isEmpty(vmessQRCode.sni)) sni else vmessQRCode.sni, fingerprint, vmessQRCode.alpn)
-//            }
+//        var str = "vmess://ewogICJ2IjogIjIiLAogICJwcyI6ICJ0ZXN0X2FuZHJvaWQiLAogICJhZGQiOiAiOTUuMTc5LjIyNi45OCIsCiAgInBvcnQiOiAyMzk4MSwKICAiaWQiOiAiNmZkYmIzOGMtNjkxNi00Y2QyLWE5ZTQtNzc5YWIxM2FhODA0IiwKICAiYWlkIjogMCwKICAibmV0IjogIndzIiwKICAidHlwZSI6ICJub25lIiwKICAiaG9zdCI6ICIiLAogICJwYXRoIjogIi8iLAogICJ0bHMiOiAibm9uZSIKfQ=="
+//        AngConfigManager.importBatchConfig(str, "", false);
+//        var serverList = MmkvManager.decodeServerList()
+//        if (serverList.size > 0) {
+//            var guid = serverList.get(0)
+//            mainStorage?.encode(MmkvManager.KEY_SELECTED_SERVER, guid)
 //        }
 
-//        var json_str = "{\"configType\":\"VMESS\",\"outboundBean\":{\"mux\":{\"concurrency\":8,\"enabled\":false},\"protocol\":\"vmess\",\"settings\":{\"vnext\":[{\"address\":\"192.248.173.113\",\"users\":[{\"alterId\":0,\"encryption\":\"\",\"flow\":\"\",\"id\":\"01a37cbd-8eb2-4ecc-a52f-0814dcab177d\",\"security\":\"auto\",\"level\":8}],\"port\":38637}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"none\",\"wsSettings\":{\"headers\":{\"Host\":\"\"},\"path\":\"/\"}},\"tag\":\"proxy\"},\"remarks\":\"5685297461\",\"subscriptionId\":\"\",\"configVersion\":3,\"addedTime\":1667535304448}"
-//        var config: ServerConfig? = null
-//        config = ServerConfig.create(EConfigType.VMESS)
-//        var guid = MmkvManager.encodeServerConfig("", config)
-//        mainStorage.encode(MmkvManager.KEY_SELECTED_SERVER, guid)
+
+
+        application.registerReceiver(mMsgReceiver, IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY))
+        mMsgReceiver.mainActivity = this
+        MessageUtil.sendMsg2Service(application, AppConfig.MSG_REGISTER_CLIENT, "")
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        application.unregisterReceiver(mMsgReceiver)
+    }
 
-    fun startV2Ray() {
-        if (mainStorage?.decodeString(MmkvManager.KEY_SELECTED_SERVER).isNullOrEmpty()) {
-            return
+    private val mMsgReceiver = object : BroadcastReceiver() {
+
+        public var mainActivity : MahsaMainActivity? = null
+
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            when (intent?.getIntExtra("key", 0)) {
+                AppConfig.MSG_STATE_RUNNING -> {
+                    isRunning.value = true
+                }
+                AppConfig.MSG_STATE_NOT_RUNNING -> {
+                    isRunning.value = false
+                }
+                AppConfig.MSG_STATE_START_SUCCESS -> {
+                    getApplication().toast(R.string.toast_services_success)
+                    isRunning.value = true
+                    binding.btnConnect.isEnabled = true
+                }
+                AppConfig.MSG_STATE_START_FAILURE -> {
+                    getApplication().toast(R.string.toast_services_failure)
+                    isRunning.value = false
+                    binding.btnConnect.isEnabled = true
+                }
+                AppConfig.MSG_STATE_STOP_SUCCESS -> {
+                    isRunning.value = false
+                }
+                AppConfig.MSG_MEASURE_DELAY_SUCCESS -> {
+//                    updateTestResultAction.value = intent.getStringExtra("content")
+                }
+                AppConfig.MSG_MEASURE_CONFIG_SUCCESS -> {
+                    val resultPair = intent.getSerializableExtra("content") as Pair<String, Long>
+                    var guid = resultPair.first
+                    var delay = resultPair.second
+                    Log.i(TAG, "delay ready fig config ($guid): $delay")
+                    mainActivity?.delaysMap?.put(guid.toString(),  delay.toLong())
+                    binding.editTextTextPersonName.text = "code responded in " + delay.toLong() + "ms"
+                    mainActivity?.checkDelaysCompleted(true)
+                }
+            }
         }
-//        toast(R.string.toast_services_start)
-        V2RayServiceManager.startV2Ray(this)
-
     }
+
+
+//    fun startV2Ray() {
+//        // 1. Test All configs in storage
+//        // 2. If any of them worked
+//        //        Choose the fastest one if any of them worked
+//        //    Else
+//        // 3.     get fresh set of keys
+//        // 4.     Test All configs in storage
+//        // 5.     If any of them worked
+//        // 6.          Choose the fastest one if any of them worked
+//        binding.btnConnect.isEnabled = false
+//        testAllConnectionsInStorage(true)
+//
+////        if (mainStorage?.decodeString(MmkvManager.KEY_SELECTED_SERVER).isNullOrEmpty()) {
+////            return
+////        }
+//////        toast(R.string.toast_services_start)
+////        V2RayServiceManager.startV2Ray(this)
+//    }
+
+    private val tcpingTestScope by lazy { CoroutineScope(Dispatchers.IO) }
 
     fun onConnectClicked() {
-
         binding.btnConnect.isEnabled = false
         isConnected = !isConnected;
 
         if (isConnected) {
             val intent = VpnService.prepare(this)
             if (intent == null) {
-                startV2Ray()
+                connectToVPN()
             } else {
-                requestVpnPermission.launch(intent)
+                requestVpnPermission.launch(intent) /* will call connectToVPN() */
             }
             binding.btnConnect.text = "Disconnect"
         } else {
@@ -159,8 +146,105 @@ class MahsaMainActivity : BaseActivity() {
             binding.btnConnect.text = "Connect"
         }
 
-        binding.btnConnect.isEnabled = true
+//        binding.btnConnect.isEnabled = true
     }
 
+    fun connectToVPN() {
+        binding.btnConnect.isEnabled = false
+        // 1. Test All configs in storage
+        // 2. If any of them worked
+        //        Choose the fastest one if any of them worked
+        //    Else
+        // 3.     get fresh set of keys
+        // 4.     Test All configs in storage
+        // 5.     If any of them worked
+        // 6.          Choose the fastest one if any of them worked
+        testAllConnectionsInStorage(true)
+    }
 
+    fun testAllConnectionsInStorage(getCodesFromServerIfFail : Boolean) {
+        tcpingTestScope.coroutineContext[Job]?.cancelChildren()
+        delaysMap.clear()
+
+        var serverList = MmkvManager.decodeServerList()
+        if (serverList.size == 0 && getCodesFromServerIfFail) {
+            getNewConfigsFromServer()
+        }
+
+        this@MahsaMainActivity.runOnUiThread(java.lang.Runnable {
+            binding.editTextTextPersonName.text = "Testing " + serverList.size + " saved configs ..."
+        })
+        for (guid in serverList) {
+            delaysMap.put(guid, -1)
+            val config = V2rayConfigUtil.getV2rayConfig(application, guid)
+            if (config.status) {
+                MessageUtil.sendMsg2TestService(application, AppConfig.MSG_MEASURE_CONFIG, Pair(guid, config.content))
+            }
+        }
+        tcpingTestScope.launch {
+            delay(5000)
+
+            this@MahsaMainActivity.runOnUiThread(java.lang.Runnable {
+                binding.editTextTextPersonName.text = "5 Seconds timeout completed, using the best one"
+            })
+            if (!checkDelaysCompleted(false)) {
+                this@MahsaMainActivity.runOnUiThread(java.lang.Runnable {
+                    binding.editTextTextPersonName.text = "Timeout! Getting new codes from server"
+                })
+
+                if (getCodesFromServerIfFail) {
+                    getNewConfigsFromServer()
+                } else {
+                    this@MahsaMainActivity.runOnUiThread(java.lang.Runnable {
+                        binding.btnConnect.isEnabled = true
+                    })
+                }
+            }
+        }
+    }
+
+    fun getNewConfigsFromServer() {
+        MmkvManager.removeAllServer()
+        var str = "vmess://eyJ2IjoiMiIsInBzIjoiNTY4NTI5NzQ2MSIsImFkZCI6IjE1OS4xMDAuMzAuMTY0IiwicG9ydCI6MzE0MjEsImlkIjoiMTc5YmJhMDktZmQ4Yy00NmI0LTk1NmMtNWE3ZmVlMzAxY2I4IiwiYWlkIjowLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoiaHR0cCIsImhvc3QiOiIiLCJwYXRoIjoiLyIsInRscyI6Im5vbmUifQ==\n"+
+                "trojan://9Y705ZMUKy@mahsa212ktkh.mahsaaminivpn.com:48470#5685297461\n" +
+                "vless://8b151e98-000e-4ff9-a68f-fa0d5902f943@mahsa212ktkh.mahsaaminivpn.com:47660?type=tcp&security=xtls&flow=xtls-rprx-direct#5685297461\n" +
+                "vmess://eyJ2IjoiMiIsInBzIjoiNTY4NTI5NzQ2MSIsImFkZCI6IjE4OC4xMjEuMTE1LjEwMyIsInBvcnQiOjM0NTAxLCJpZCI6IjY2ZDJlODdkLTAxZjQtNDJhMS05OGFhLWZiNGFlOGVkYWFlMyIsImFpZCI6MCwibmV0IjoidGNwIiwidHlwZSI6Imh0dHAiLCJob3N0IjoiIiwicGF0aCI6Ii8iLCJ0bHMiOiJub25lIn0=\n" +
+                "trojan://497JVzIb0H@mahsa155dvug.mahsaaminivpn.com:30503#5685297461\n" +
+                "vless://3d861810-c90a-4c2d-9644-1c1f7ace6acd@mahsa155dvug.mahsaaminivpn.com:36023?type=tcp&security=xtls&flow=xtls-rprx-direct#5685297461\n" +
+                "vmess://eyJ2IjoiMiIsInBzIjoiNTY4NTI5NzQ2MSIsImFkZCI6Im1haHNhMjEzMnNicS5zbmFwcGZvb2Qud29yayIsInBvcnQiOjIwODIsImlkIjoiZjE3OTk4YjYtMjgwMC00OTMxLWEzODEtODJmZDJmODY4OTE5IiwiYWlkIjowLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6IiIsInBhdGgiOiIvIiwidGxzIjoibm9uZSJ9\n" +
+                "vless://b6a217ac-bad6-4f73-b971-a456d34c0980@mahsa2132sbq.snappfood.work:8443?type=ws&security=tls&path=%2F#5685297461";
+
+
+        AngConfigManager.importBatchConfig(str, "", false);
+
+        testAllConnectionsInStorage(false)
+    }
+
+    fun checkDelaysCompleted(waitForAll : Boolean) : Boolean {
+        var minDelay : Long = 5000
+        var minGUID = ""
+        for (entry in delaysMap.entries.iterator()) {
+            val guid = entry.key
+            val delay = entry.value
+            if (delay<0 && waitForAll) {
+                Log.i(TAG, "at least one server is not completed (guid: $guid)")
+                return false
+            }
+            if (delay != -1L && delay < minDelay) {
+                minDelay = delay
+                minGUID = guid
+            }
+        }
+
+        if (minGUID == "") {
+            return false
+        }
+
+        mainStorage?.encode(MmkvManager.KEY_SELECTED_SERVER, minGUID)
+
+        toast(R.string.toast_services_start)
+        binding.editTextTextPersonName.text = "Connecting to fastest ..."
+        V2RayServiceManager.startV2Ray(this)
+        return true
+    }
 }

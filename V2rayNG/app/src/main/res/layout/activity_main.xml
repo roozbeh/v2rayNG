@@ -33,28 +33,22 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
 
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:orientation="vertical">
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/recycler_view"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:nextFocusRight="@+id/fab" />
 
                     <LinearLayout
                         android:id="@+id/layout_test"
                         android:layout_width="match_parent"
                         android:layout_height="@dimen/connection_test_height"
                         android:background="?attr/colorPrimary"
-                        android:gravity="center|left"
-                        android:nextFocusRight="@+id/fab"
                         android:clickable="true"
                         android:focusable="true"
-                        android:nextFocusLeft="@+id/recycler_view">
+                        android:gravity="center|left"
+                        android:nextFocusLeft="@+id/recycler_view"
+                        android:nextFocusRight="@+id/fab">
 
                         <TextView
                             android:id="@+id/tv_test_state"
@@ -68,8 +62,14 @@
                             android:textColor="@color/colorWhite" />
 
                     </LinearLayout>
-                </LinearLayout>
 
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recycler_view"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:nextFocusRight="@+id/fab" />
+                </LinearLayout>
 
                 <com.github.jorgecastilloprz.FABProgressCircle
                     android:id="@+id/fabProgressCircle"
