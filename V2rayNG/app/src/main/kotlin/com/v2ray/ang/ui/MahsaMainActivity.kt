@@ -1,7 +1,6 @@
 package com.v2ray.ang.ui
 
 import android.content.*
-import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,9 +55,9 @@ class MahsaMainActivity : BaseActivity() {
 
 
 
-        application.registerReceiver(mMsgReceiver, IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY))
-        mMsgReceiver.mainActivity = this
-        MessageUtil.sendMsg2Service(application, AppConfig.MSG_REGISTER_CLIENT, "")
+//        application.registerReceiver(mMsgReceiver, IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY))
+//        mMsgReceiver.mainActivity = this
+//        MessageUtil.sendMsg2Service(application, AppConfig.MSG_REGISTER_CLIENT, "")
     }
 
     override fun onDestroy() {
@@ -130,21 +129,23 @@ class MahsaMainActivity : BaseActivity() {
     private val tcpingTestScope by lazy { CoroutineScope(Dispatchers.IO) }
 
     fun onConnectClicked() {
-        binding.btnConnect.isEnabled = false
-        isConnected = !isConnected;
-
-        if (isConnected) {
-            val intent = VpnService.prepare(this)
-            if (intent == null) {
-                connectToVPN()
-            } else {
-                requestVpnPermission.launch(intent) /* will call connectToVPN() */
-            }
-            binding.btnConnect.text = "Disconnect"
-        } else {
-            Utils.stopVService(this)
-            binding.btnConnect.text = "Connect"
-        }
+        val myIntent = Intent(this@MahsaMainActivity, CodeCompareActivity::class.java)
+        this@MahsaMainActivity.startActivity(myIntent)
+//        binding.btnConnect.isEnabled = false
+//        isConnected = !isConnected;
+//
+//        if (isConnected) {
+//            val intent = VpnService.prepare(this)
+//            if (intent == null) {
+//                connectToVPN()
+//            } else {
+//                requestVpnPermission.launch(intent) /* will call connectToVPN() */
+//            }
+//            binding.btnConnect.text = "Disconnect"
+//        } else {
+//            Utils.stopVService(this)
+//            binding.btnConnect.text = "Connect"
+//        }
 
 //        binding.btnConnect.isEnabled = true
     }
